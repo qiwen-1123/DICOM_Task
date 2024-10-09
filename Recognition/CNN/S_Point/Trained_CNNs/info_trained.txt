@@ -1,0 +1,6 @@
+S2_Point
+Best error is: 9.6 pixels
+Best filters: 30
+Best kernel size: 4
+Best cnn type: 1
+At epoch: 316
