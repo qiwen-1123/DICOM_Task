@@ -64,7 +64,7 @@ for i in range(len(name_points)):
             roi_y_end = mean_y[i] + half_size
             roi = curr_image[roi_y_start:roi_y_end, roi_x_start:roi_x_end]
             roi2 = roi.copy()
-            roi = np.expand_dims(roi, 3)
+            roi = np.expand_dims(roi, 2)
             roi = np.expand_dims(roi, 0)
             predicted = model.predict(roi)
             x_pred = int(predicted[0][0]*size_image) + mean_x[i] - half_size

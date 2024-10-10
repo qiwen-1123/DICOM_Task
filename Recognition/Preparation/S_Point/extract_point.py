@@ -1,7 +1,7 @@
 import cv2
 import os
 
-from Preparation.util import read_points_file, recognized_text_dir, recognized_image_dir, get_point_directories, \
+from Recognition.Preparation.util import read_points_file, recognized_text_dir, recognized_image_dir, get_point_directories, \
     save_point, show_points, sort_points
 
 assert os.path.exists(recognized_text_dir) and os.path.exists(recognized_image_dir), "Directory does not exist"
