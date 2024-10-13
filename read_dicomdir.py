@@ -5,6 +5,7 @@ import open3d as o3d
 import scipy
 import matplotlib.pyplot as plt
 import copy
+import pandas as pd
 
 from skimage import measure, morphology
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -12,6 +13,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 # dicomdir_path="/home/qiwen/Documents/CT_Daten/Case WM/2023-08-24-002/DICOMDIR"
 # images_folder="/home/qiwen/Documents/CT_Daten/Case WM/2023-08-24-002/IMAGES"
 
+df = pd.read_excel('Points and definitions.xlsx', sheet_name='Case RS')
 dicomdir_path='/home/qiwen/Documents/CT_Daten/Case RS/2023-08-24-001/DICOMDIR'
 images_folder="/home/qiwen/Documents/CT_Daten/Case RS/2023-08-24-001/IMAGES"
 target_study_id="8ac05771"
@@ -166,13 +168,8 @@ def get_pixels_hu(slices):
 
 def get_open3d_pc(image, threshold=-300, save=False):
     # Position the scan upright,
-    # so the head of the patient would be at the top facing the camera
-    # p = image.transpose(2, 1, 0)
-    # p = np.flip(p, axis=0)
-    # p = np.flip(p, axis=1)
-
-    p = np.flip(image.transpose(2, 1, 0), axis=-1)  # 沿Z轴翻转 
-    # p = image
+    p = image.transpose(2, 1, 0)
+    p = np.flip(p, axis=-1)
     
     verts, faces, _, _ = measure.marching_cubes(p, threshold)  # Notice the extra underscore for normals
     
@@ -190,11 +187,35 @@ def get_open3d_pc(image, threshold=-300, save=False):
     return point_cloud
 
 def transform_point_cloud(point_cloud, image_orientation, image_position):
-    # 复制原始点云，确保不修改输入的点云
+    
+    
     transformed_point_cloud = copy.deepcopy(point_cloud)
     
     # 将 ImageOrientationPatient 转换为数组
-    orientation = np.array(image_orientation).reshape(2, 3)
+    orientation = -np.array(image_orientation).reshape(2, 3) # x and y axes in DICOM are inverted to 3D Slicer
+
+    rotation_matrix = np.zeros((3, 3))
+    rotation_matrix[:, 0] = orientation[0]  # 第一行
+    rotation_matrix[:, 1] = orientation[1]  # 第二行
+    rotation_matrix[:, 2] = np.cross(orientation[0], orientation[1])  # 第三行 (法向量)
+
+    translation_vector = np.array(image_position)
+    translation_vector[:2]=-translation_vector[:2] # x and y axes in DICOM are inverted to 3D Slicer
+    
+    transformation_matrix = np.eye(4)
+    transformation_matrix[:3, :3] = rotation_matrix.T  # 旋转矩阵
+    transformation_matrix[:3, 3] = translation_vector  # 平移向量
+
+    print("TrasnsMatrix is: \n", transformation_matrix)
+
+    # 应用变换到点云的副本
+    transformed_point_cloud.transform(transformation_matrix)
+
+    return transformed_point_cloud, transformation_matrix
+
+def get_transform_matrix(image_orientation, image_position):
+    
+    orientation = -np.array(image_orientation).reshape(2, 3) # x and y axes in DICOM are inverted to 3D Slicer
 
     # 创建一个旋转矩阵
     rotation_matrix = np.zeros((3, 3))
@@ -204,17 +225,27 @@ def transform_point_cloud(point_cloud, image_orientation, image_position):
 
     # 创建平移向量
     translation_vector = np.array(image_position)
+    translation_vector[:2]=-translation_vector[:2] # x and y axes in DICOM are inverted to 3D Slicer
 
     # 构建变换矩阵
     transformation_matrix = np.eye(4)
     transformation_matrix[:3, :3] = rotation_matrix.T  # 旋转矩阵
     transformation_matrix[:3, 3] = translation_vector  # 平移向量
+    
+    print("TrasnsMatrix is: \n", transformation_matrix) # point cloud to 3D Slice coord
+    transformation_matrix_inv = np.linalg.inv(transformation_matrix) # 3D Slice to point cloud coord
 
-    # 应用变换到点云的副本
-    transformed_point_cloud.transform(transformation_matrix)
+    return transformation_matrix, transformation_matrix_inv
 
-    return transformed_point_cloud
+def vis_marked_point(point_cloud, point_name, transformation_matrix):
+    sphere = o3d.geometry.TriangleMesh.create_sphere(radius=5.0) 
+    sphere.paint_uniform_color([0.5, 0.5, 0.5])  # 将球体颜色设置为Grey
 
+    selected_point = df[df['label'] == point_name][['transversal', 'sagittal', 'vertikal']].values[0]
+    sphere.translate(selected_point)
+    sphere.transform(transformation_matrix)
+
+    o3d.visualization.draw_geometries([point_cloud, sphere])
 
 if __name__ == "__main__":
 
@@ -260,39 +291,10 @@ if __name__ == "__main__":
     
     point_cloud=get_open3d_pc(pix_resampled, 400, True)
     
-    # 从点云中获取点的坐标
-    points = np.asarray(point_cloud.points)
-
-    # 计算每个轴的最小值和最大值
-    x_min, x_max = points[:, 0].min(), points[:, 0].max()
-    y_min, y_max = points[:, 1].min(), points[:, 1].max()
-    z_min, z_max = points[:, 2].min(), points[:, 2].max()
-
-    # 打印结果
-    print(f"X-axis range: min = {x_min}, max = {x_max}")
-    print(f"Y-axis range: min = {y_min}, max = {y_max}")
-    print(f"Z-axis range: min = {z_min}, max = {z_max}")
-    
-    # 假设你已经从 slices 中获取了这些信息
     image_orientation = slices[-1].ImageOrientationPatient
     image_position = slices[-1].ImagePositionPatient
 
-    # 变换点云
-    transformed_point_cloud = transform_point_cloud(point_cloud, image_orientation, image_position)
+    transformation_matrix, transformation_matrix_inv = get_transform_matrix(image_orientation, image_position)
 
-    # 可视化变换后的点云
-    o3d.visualization.draw_geometries([transformed_point_cloud])
-    
-    # 从点云中获取点的坐标
-    points = np.asarray(transformed_point_cloud.points)
-
-    # 计算每个轴的最小值和最大值
-    x_min, x_max = points[:, 0].min(), points[:, 0].max()
-    y_min, y_max = points[:, 1].min(), points[:, 1].max()
-    z_min, z_max = points[:, 2].min(), points[:, 2].max()
-
-    # 打印结果
-    print("Transformation Done!")
-    print(f"X-axis range: min = {x_min}, max = {x_max}")
-    print(f"Y-axis range: min = {y_min}, max = {y_max}")
-    print(f"Z-axis range: min = {z_min}, max = {z_max}")
+    point_name='N'
+    vis_marked_point(point_cloud, point_name, transformation_matrix_inv)
