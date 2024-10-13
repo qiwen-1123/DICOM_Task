@@ -13,7 +13,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 # dicomdir_path="/home/qiwen/Documents/CT_Daten/Case WM/2023-08-24-002/DICOMDIR"
 # images_folder="/home/qiwen/Documents/CT_Daten/Case WM/2023-08-24-002/IMAGES"
 
-df = pd.read_excel('Points and definitions.xlsx', sheet_name='Case RS')
+df = pd.read_excel('/home/qiwen/Documents/CT_Daten/Points and definitions.xlsx', sheet_name='Case RS')
 dicomdir_path='/home/qiwen/Documents/CT_Daten/Case RS/2023-08-24-001/DICOMDIR'
 images_folder="/home/qiwen/Documents/CT_Daten/Case RS/2023-08-24-001/IMAGES"
 target_study_id="8ac05771"
@@ -142,8 +142,7 @@ def resample(image, scan, new_spacing=[1,1,1]):
     return image, new_spacing
 
 def get_pixels_hu(slices):
-    # image = np.stack([s.pixel_array for s in slices], axis=-1)
-    image = np.stack([s.pixel_array for s in slices])
+    image = np.stack([s.pixel_array for s in slices[::-1]])
     # Convert to int16 (from sometimes int16), 
     # should be possible as values should always be low enough (<32k)
     image = image.astype(np.int16)
@@ -169,8 +168,7 @@ def get_pixels_hu(slices):
 def get_open3d_pc(image, threshold=-300, save=False):
     # Position the scan upright,
     p = image.transpose(2, 1, 0)
-    p = np.flip(p, axis=-1)
-    
+
     verts, faces, _, _ = measure.marching_cubes(p, threshold)  # Notice the extra underscore for normals
     
     point_cloud = o3d.geometry.PointCloud()
