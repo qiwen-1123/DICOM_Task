@@ -179,7 +179,7 @@ class DICOMDIR:
 
         return transformation_matrix, transformation_matrix_inv
 
-    def vis_marked_point(self, point_name):
+    def vis_marked_point(self, point_name, save=False):
         sphere = o3d.geometry.TriangleMesh.create_sphere(radius=5.0) 
         sphere.paint_uniform_color([0.5, 0.5, 0.5])
 
@@ -187,10 +187,22 @@ class DICOMDIR:
         sphere.translate(selected_point)
         sphere.transform(self.transformation_matrix_inv)
 
+        if save == True:
+            # red_color = np.tile([0.8, 0.2, 0.0], (len(self.point_cloud.points), 1))
+            # self.point_cloud.colors = o3d.utility.Vector3dVector(red_color)
+
+            sphere_points = sphere.sample_points_uniformly(number_of_points=1000)
+            
+            # sphere_colors = np.tile([0.5, 0.5, 0.5], (len(sphere_points.points), 1))
+            # sphere_points.colors = o3d.utility.Vector3dVector(sphere_colors)
+
+            combined_point_cloud = self.point_cloud + sphere_points
+            o3d.io.write_point_cloud("marked_point_cloud.ply", combined_point_cloud)
+
         o3d.visualization.draw_geometries([self.point_cloud, sphere])
 
 if __name__ == "__main__":
 
     dicom_data=DICOMDIR(dicomdir_path, images_folder, target_study_id, target_SeriesNumber)
     
-    dicom_data.vis_marked_point("N")
+    dicom_data.vis_marked_point("N", True)
